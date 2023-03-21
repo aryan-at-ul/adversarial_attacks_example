@@ -35,7 +35,8 @@ from sklearn.metrics import roc_auc_score
 from torch_geometric.nn import GATConv
 from torch_geometric.loader import NeighborLoader
 curretn_path = os.getcwd()
-path = f"{curretn_path}/chest_xray_graphs_densent169_50sp"
+path = f"{curretn_path}/chest_xray_graphs_adv_fgsm" # 75-78 % acc on adv
+# path = f"{curretn_path}/chest_xray_graphs_simple_fgsm"
 
 embed_dim = 128
 X,Y = [],[]
@@ -216,7 +217,7 @@ class GAT3(torch.nn.Module):
         self.in_head = 8
         self.out_head = 1
         
-        self.conv1 = GATConv(2208, self.hid, heads=self.in_head, dropout=0.6)
+        self.conv1 = GATConv(512, self.hid, heads=self.in_head, dropout=0.6)
         self.conv2 = GATConv(self.hid*self.in_head, 32, concat=False,
                              heads=8)
         self.conv3 = GATConv(32, 16, heads = 1, concat=True)
@@ -312,7 +313,7 @@ model = GAT3()
 
 
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay = 0.0001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay = 0.01)
 criterion = torch.nn.CrossEntropyLoss()
 
 def train():

@@ -59,7 +59,7 @@ import requests
 
 # Setup path to data folder
 data_path = Path("data/")
-image_path = "/home/melkor/projects/img_to_graph/chest_xray_fgsm" 
+image_path = "/home/melkor/projects/adversarial_attacks_example/chest_xray_fgsm" 
 
 
 
@@ -113,6 +113,9 @@ weights = torchvision.models.ResNet18_Weights.DEFAULT # .DEFAULT = best availabl
 # model = torchvision.models.resnet18(weights=weights).to(device)
 model = torchvision.models.resnet18(pretrained=True).to(device)
 
+
+
+
 # for denset models
 # for param in model.features.parameters():
 #     param.requires_grad = True #this was false in the original
@@ -129,38 +132,7 @@ summary(model=model,
         row_settings=["var_names"]
 )
 print("this summary with parmans true")
-"""<img src="https://raw.githubusercontent.com/mrdbourke/pytorch-deep-learning/main/images/06-torchinfo-summary-unfrozen-layers.png" alt="output of torchinfo.summary() when passed our model with all layers as trainable" width=900/>
 
-Woah!
-
-Now that's a big model!
-
-From the output of the summary, we can see all of the various input and output shape changes as our image data goes through the model.
-
-And there are a whole bunch more total parameters (pretrained weights) to recognize different patterns in our data.
-
-For reference, our model from previous sections, **TinyVGG had 8,083 parameters vs. 5,288,548 parameters for `efficientnet_b0`, an increase of ~654x**!
-
-What do you think, will this mean better performance?
-
-### 3.4 Freezing the base model and changing the output layer to suit our needs
-
-The process of transfer learning usually goes: freeze some base layers of a pretrained model (typically the `features` section) and then adjust the output layers (also called head/classifier layers) to suit your needs.
-
-<img src="https://raw.githubusercontent.com/mrdbourke/pytorch-deep-learning/main/images/06-v2-effnet-changing-the-classifier-head.png" alt="changing the efficientnet classifier head to a custom number of outputs" width=900/>
-
-*You can customise the outputs of a pretrained model by changing the output layer(s) to suit your problem. The original `torchvision.models.efficientnet_b0()` comes with `out_features=1000` because there are 1000 classes in ImageNet, the dataset it was trained on. However, for our problem, classifying images of pizza, steak and sushi we only need `out_features=3`.*
-
-Let's freeze all of the layers/parameters in the `features` section of our `efficientnet_b0` model.
-
-> **Note:** To *freeze* layers means to keep them how they are during training. For example, if your model has pretrained layers, to *freeze* them would be to say, "don't change any of the patterns in these layers during training, keep them how they are." In essence, we'd like to keep the pretrained weights/patterns our model has learned from ImageNet as a backbone and then only change the output layers.
-
-We can freeze all of the layers/parameters in the `features` section by setting the attribute `requires_grad=False`.
-
-For parameters with `requires_grad=False`, PyTorch doesn't track gradient updates and in turn, these parameters won't be changed by our optimizer during training.
-
-In essence, a parameter with `requires_grad=False` is "untrainable" or "frozen" in place.
-"""
 
 # Freeze all base layers in the "features" section of the model (the feature extractor) by setting requires_grad=False
 # for param in model.features.parameters():
@@ -169,33 +141,6 @@ In essence, a parameter with `requires_grad=False` is "untrainable" or "frozen" 
 for param in model.parameters():
     param.requires_grad = True #this was false in the original  
 
-
-"""Feature extractor layers frozen!
-
-Let's now adjust the output layer or the `classifier` portion of our pretrained model to our needs.
-
-Right now our pretrained model has `out_features=1000` because there are 1000 classes in ImageNet. 
-
-However, we don't have 1000 classes, we only have three, pizza, steak and sushi.
-
-We can change the `classifier` portion of our model by creating a new series of layers.
-
-The current `classifier` consists of:
-
-```
-(classifier): Sequential(
-    (0): Dropout(p=0.2, inplace=True)
-    (1): Linear(in_features=1280, out_features=1000, bias=True)
-```
-
-We'll keep the `Dropout` layer the same using [`torch.nn.Dropout(p=0.2, inplace=True)`](https://pytorch.org/docs/stable/generated/torch.nn.Dropout.html).
-
-> **Note:** [Dropout layers](https://developers.google.com/machine-learning/glossary#dropout_regularization) randomly remove connections between two neural network layers with a probability of `p`. For example, if `p=0.2`, 20% of connections between neural network layers will be removed at random each pass. This practice is meant to help regularize (prevent overfitting) a model by making sure the connections that remain learn features to compensate for the removal of the other connections (hopefully these remaining features are *more general*). 
-
-And we'll keep `in_features=1280` for our `Linear` output layer but we'll change the `out_features` value to the length of our `class_names` (`len(['pizza', 'steak', 'sushi']) = 3`).
-
-Our new `classifier` layer should be on the same device as our `model`. 
-"""
 
 # Set the manual seeds
 torch.manual_seed(42)
@@ -211,56 +156,21 @@ model.classifier = torch.nn.Sequential(
                     out_features=output_shape, # same number of output units as our number of classes
                     bias=True)).to(device)
 
-"""Nice!
 
-Output layer updated, let's get another summary of our model and see what's changed.
-"""
+# summary(model, 
+#         input_size=(32, 3, 224, 224), # make sure this is "input_size", not "input_shape" (batch_size, color_channels, height, width)
+#         verbose=0,
+#         col_names=["input_size", "output_size", "num_params", "trainable"],
+#         col_width=20,
+#         row_settings=["var_names"]
+# )
 
-# # Do a summary *after* freezing the features and changing the output classifier layer (uncomment for actual output)
-summary(model, 
-        input_size=(32, 3, 224, 224), # make sure this is "input_size", not "input_shape" (batch_size, color_channels, height, width)
-        verbose=0,
-        col_names=["input_size", "output_size", "num_params", "trainable"],
-        col_width=20,
-        row_settings=["var_names"]
-)
-
-"""<img src="https://raw.githubusercontent.com/mrdbourke/pytorch-deep-learning/main/images/06-torchinfo-summary-frozen-layers.png" alt="output of torchinfo.summary() after freezing multiple layers in our model and changing the classifier head" width=900/>
-
-Ho, ho! There's a fair few changes here!
-
-Let's go through them:
-* **Trainable column** - You'll see that many of the base layers (the ones in the `features` portion) have their Trainable value as `False`. This is because we set their attribute `requires_grad=False`. Unless we change this, these layers won't be updated during furture training.
-* **Output shape of `classifier`** - The `classifier` portion of the model now has an Output Shape value of `[32, 3]` instead of `[32, 1000]`. It's Trainable value is also `True`. This means its parameters will be updated during training. In essence, we're using the `features` portion to feed our `classifier` portion a base representation of an image and then our `classifier` layer is going to learn how to base representation aligns with our problem.
-* **Less trainable parameters** - Previously there was 5,288,548 trainable parameters. But since we froze many of the layers of the model and only left the `classifier` as trainable, there's now only 3,843 trainable parameters (even less than our TinyVGG model). Though there's also 4,007,548 non-trainable parameters, these will create a base representation of our input images to feed into our `classifier` layer.
-
-> **Note:** The more trainable parameters a model has, the more compute power/longer it takes to train. Freezing the base layers of our model and leaving it with less trainable parameters means our model should train quite quickly. This is one huge benefit of transfer learning, taking the already learned parameters of a model trained on a problem similar to yours and only tweaking the outputs slightly to suit your problem.
-
-## 4. Train model
-
-Now we've got a pretraiend model that's semi-frozen and has a customised `classifier`, how about we see transfer learning in action?
-
-To begin training, let's create a loss function and an optimizer.
-
-Because we're still working with multi-class classification, we'll use `nn.CrossEntropyLoss()` for the loss function.
-
-And we'll stick with `torch.optim.Adam()` as our optimizer with `lr=0.001`.
-"""
 
 # Define loss and optimizer
 loss_fn = nn.CrossEntropyLoss()
+# loss_fn = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-"""Wonderful! 
-
-To train our model, we can use `train()` function we defined in the [05. PyTorch Going Modular section 04](https://www.learnpytorch.io/05_pytorch_going_modular/#4-creating-train_step-and-test_step-functions-and-train-to-combine-them).
-
-The `train()` function is in the [`engine.py`](https://github.com/mrdbourke/pytorch-deep-learning/blob/main/going_modular/going_modular/engine.py) script inside the [`going_modular` directory](https://github.com/mrdbourke/pytorch-deep-learning/tree/main/going_modular/going_modular). 
-
-Let's see how long it takes to train our model for 5 epochs.
-
-> **Note:** We're only going to be training the parameters `classifier` here as all of the other parameters in our model have been frozen.
-"""
 
 # Set the random seeds
 torch.manual_seed(42)

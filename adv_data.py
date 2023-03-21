@@ -44,6 +44,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 from art.attacks.evasion import FastGradientMethod
+from art.attacks.evasion import DeepFool
+
 from art.estimators.classification import PyTorchClassifier
 
 
@@ -237,7 +239,8 @@ def make_adversarial_example(image_pp, epsilon, dirs_names,class_name,data_typ,i
     # perturbed_image = unnormalize(perturbed_image.clone().detach().cpu())
     # save_image(perturbed_image, 'perturbed_image.jpg')
     epsilon = 0.03
-    attack = FastGradientMethod(estimator=classifier, eps=epsilon)
+    # attack = FastGradientMethod(estimator=classifier, eps=epsilon)
+    attack = DeepFool(classifier=classifier, max_iter=10, epsilon=0.03, nb_grads=10)
     # adversarial_image_np = attack.generate(x=image_pp)
     adversarial_image_np = attack.generate(x=image_pp.cpu().numpy(), y=true_labels_tensor.cpu().numpy())
 
